@@ -1,11 +1,12 @@
 from functools import wraps
-from logging import getLogger
 from time import time
 from typing import Callable
 
+from supermoon_client.logger import get_logger
+
 
 def supermoon_api(func: Callable):
-    logger = getLogger('supermoon')
+    logger = get_logger()
 
     @wraps(func)
     async def wrapper(*args, **kwargs):

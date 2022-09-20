@@ -1,20 +1,18 @@
-import base64
 import os
 import tempfile
 
 import cv2
 import pyaudio
-from fastapi import APIRouter, Query
-from playsound import playsound
+from fastapi import APIRouter, Query, UploadFile, HTTPException
 from pycaw.api.audioclient import ISimpleAudioVolume
 from pycaw.api.endpointvolume import IAudioEndpointVolume
 from pycaw.utils import AudioUtilities
 from starlette.background import BackgroundTasks
 from starlette.responses import StreamingResponse
-from supermoon_common.models.client.play_audio import PlayAudioBufferRequest
+from starlette.status import HTTP_403_FORBIDDEN, HTTP_404_NOT_FOUND
 
 from supermoon_client.api_decorator import supermoon_api
-from supermoon_client.utils import get_frames
+from supermoon_client.utils import get_frames, play_sound, stop_sound
 
 router = APIRouter(
     prefix='/devices',
@@ -33,21 +31,31 @@ async def set_volume(level: float = Query(ge=0, le=1)):
 
 @router.post('/play_audio_file')
 @supermoon_api
-async def play_audio_file(path: str, background_tasks: BackgroundTasks):
-    background_tasks.add_task(playsound, path)
+async def play_audio_file(path: str):
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f'File at {path} could not be found')
+    try:
+        play_sound(path, wait=False)
+    except Exception as e:
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.post('/play_audio_buffer')
 @supermoon_api
-async def play_audio_buffer(request: PlayAudioBufferRequest, background_tasks: BackgroundTasks):
-    with tempfile.NamedTemporaryFile(suffix=f'.{request.type}', delete=False) as file:
-        file.write(base64.b64decode(request.data))
+async def play_audio_buffer(background_tasks: BackgroundTasks, buffer: UploadFile):
+    with tempfile.NamedTemporaryFile(suffix=f'.{buffer.filename}', delete=False) as file:
+        file.write(await buffer.read())
 
     def play_and_remove(path: str):
-        playsound(path)
+        play_sound(path)
         os.remove(path)
 
     background_tasks.add_task(play_and_remove, file.name)
+
+
+@router.post('/stop_audio')
+async def stop_audio():
+    stop_sound()
 
 
 @router.get('/camera')

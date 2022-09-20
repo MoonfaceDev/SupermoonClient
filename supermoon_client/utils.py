@@ -1,8 +1,12 @@
 import time
+from multiprocessing import Process
 from typing import Callable, Iterator
 
 import cv2
 import numpy as np
+from playsound import playsound
+
+audio_process: Process | None = None
 
 
 def get_frames(get_image: Callable[[], np.ndarray], fps: float, resolution: tuple[int, int]) -> Iterator[bytes]:
@@ -19,3 +23,17 @@ def get_frames(get_image: Callable[[], np.ndarray], fps: float, resolution: tupl
               f'\r\n'.encode() + buffer
         time_elapsed = time.time() - start_time
         time.sleep(max([0, 1 / fps - time_elapsed]))
+
+
+def play_sound(path: str, wait: bool = True):
+    global audio_process
+    audio_process = Process(target=playsound, args=(path,))
+    audio_process.start()
+    if wait:
+        audio_process.join()
+
+
+def stop_sound():
+    global audio_process
+    audio_process.terminate()
+    audio_process.join()

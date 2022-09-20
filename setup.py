@@ -18,11 +18,12 @@ setup(
         'psutil~=5.9.2',
         'browser-history~=0.3.2',
         'pycaw==20220416',
-        'playsound~=1.3.0',
         'numpy~=1.23.3',
         'opencv-python~=4.6.0.66',
         'mss~=6.1.0',
         'pyaudio~=0.2.12',
+        'python-multipart~=0.0.5',
+        'playsound==1.2.2',
         'supermoon_common~=0.1.0'
     ],
     entry_points={
