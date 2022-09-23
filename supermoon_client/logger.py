@@ -1,5 +1,5 @@
 import logging
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 
 from supermoon_client.consts import LOG_FILE_NAME, LOGGER_NAME
 
@@ -9,7 +9,7 @@ _logger = None
 
 
 def _get_file_handler():
-    file_handler = RotatingFileHandler(LOG_FILE_NAME)
+    file_handler = TimedRotatingFileHandler(LOG_FILE_NAME)
     file_handler.setLevel(logging.DEBUG)
     return file_handler
 
