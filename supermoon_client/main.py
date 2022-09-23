@@ -3,9 +3,11 @@ import os
 import uvicorn
 
 from supermoon_client.app import app
+from supermoon_client.communication_methods import CommunicationMethod
 from supermoon_client.consts import STARTUP_SCRIPT_NAME, EXECUTABLE_NAME, SERVER_HOST, \
-    SERVER_PORT
+    SERVER_PORT, COMMUNICATION_METHOD
 from supermoon_client.logger import get_logger
+from supermoon_client.poll_client import start_polling
 
 
 def enable_firewall(executable: str):
@@ -25,7 +27,7 @@ def add_to_startup(executable: str):
         STARTUP_SCRIPT_NAME
     )
     try:
-        with open(os.path.join(bat_path, STARTUP_SCRIPT_NAME), "w+") as bat_file:
+        with open(bat_path, "w+") as bat_file:
             bat_file.write(rf'cd {os.getcwd()} & start "" "{executable}"')
     except Exception as e:
         get_logger().exception(e)
@@ -33,7 +35,10 @@ def add_to_startup(executable: str):
 
 def main():
     executable = os.path.join(os.getcwd(), EXECUTABLE_NAME)
-    enable_firewall(executable)
     add_to_startup(executable)
 
-    uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT)
+    if COMMUNICATION_METHOD == CommunicationMethod.SERVER:
+        enable_firewall(executable)
+        uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT)
+    elif COMMUNICATION_METHOD == CommunicationMethod.POLL:
+        start_polling()

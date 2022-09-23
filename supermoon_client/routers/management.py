@@ -1,8 +1,8 @@
 import os
 import subprocess
-import sys
+from logging.handlers import RotatingFileHandler
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, UploadFile
 from starlette.responses import FileResponse
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_403_FORBIDDEN
 
@@ -18,7 +18,7 @@ router = APIRouter(
 
 @router.get('/log')
 @supermoon_api
-def get_log():
+async def get_log():
     if not os.path.isfile(LOG_FILE_NAME):
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f'Log file could not be found')
     try:
@@ -27,8 +27,18 @@ def get_log():
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=str(e))
 
 
+@router.delete('/clear_log')
+@supermoon_api
+async def clear_log():
+    for handler in get_logger().handlers:
+        if isinstance(handler, RotatingFileHandler):
+            get_logger().log('Rolling over:', handler)
+            handler.doRollover()
+
+
 @router.post('/remove_client')
-def remove_client():
+@supermoon_api
+async def remove_client():
     bat_path = os.path.join(
         rf'C:\Users\{os.getlogin()}\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup',
         STARTUP_SCRIPT_NAME
@@ -38,15 +48,31 @@ def remove_client():
     except Exception as e:
         get_logger().exception(e)
     try:
-        os.remove(LOG_FILE_NAME)
+        os.remove(os.path.join(os.getcwd(), LOG_FILE_NAME))
     except Exception as e:
         print(e)
     executable = os.path.join(os.getcwd(), EXECUTABLE_NAME)
-    subprocess.Popen(f"python -c \"import os, time; time.sleep({EXE_REMOVAL_TIME}); os.remove('{executable}');\"")
-    sys.exit(0)
+    subprocess.Popen(f'start /min cmd /c "timeout {EXE_REMOVAL_TIME} & del "{executable}""',
+                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+    os.system(f'taskkill /F /PID {os.getpid()}')
+
+
+@router.post('/update_client')
+@supermoon_api
+async def update_client(content: UploadFile, path: str = Query(default=os.getcwd())):
+    old_executable = os.path.join(os.getcwd(), EXECUTABLE_NAME)
+    new_executable = os.path.join(path, EXECUTABLE_NAME)
+    with open(new_executable + '.tmp', 'wb') as file:
+        file.write(await content.read())
+    os.system(f'start /min cmd /c "timeout {EXE_REMOVAL_TIME} & '
+              f'del "{old_executable}" & '
+              f'move "{new_executable}.tmp" "{new_executable}" & '
+              f'cd {path} & '
+              f'start "" "{EXECUTABLE_NAME}""')
+    os.system(f'taskkill /F /PID {os.getpid()}')
 
 
 @router.post('/stop_process')
 @supermoon_api
-def stop_process():
-    sys.exit(0)
+async def stop_process():
+    os.system(f'taskkill /F /PID {os.getpid()}')

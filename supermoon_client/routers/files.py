@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, HTTPException, Query, Body, UploadFile
 from starlette.responses import FileResponse
 from starlette.status import HTTP_404_NOT_FOUND, HTTP_403_FORBIDDEN
 from supermoon_common.models.client.dirlist import DirlistResponse, DirlistEntry, DirlistEntryType
@@ -60,13 +60,13 @@ async def read_file(path: str):
 
 @router.post('/write')
 @supermoon_api
-async def write_file(path: str = Query(), replace: bool = Query(default=False), content: bytes = Body()):
+async def write_file(content: UploadFile, path: str = Query(), replace: bool = Query(default=False), ):
     if not replace and os.path.exists(path):
         raise HTTPException(status_code=HTTP_403_FORBIDDEN,
                             detail=f'File at {path} already exists (set replace=true to override)')
     try:
         with open(path, 'wb') as file:
-            file.write(content)
+            file.write(await content.read())
     except OSError as e:
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail=str(e))
 

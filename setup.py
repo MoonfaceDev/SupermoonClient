@@ -24,6 +24,7 @@ setup(
         'pyaudio~=0.2.12',
         'python-multipart~=0.0.5',
         'playsound==1.2.2',
+        'requests~=2.28.1',
         'supermoon_common~=0.1.0'
     ],
     entry_points={
