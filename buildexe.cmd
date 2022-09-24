@@ -1,1 +1,1 @@
-pyinstaller --noconfirm --onefile --add-binary "./ffmpeg/bin/ffmpeg.exe;ffmpeg" --windowed main.py
+pyinstaller --noconfirm --onefile --windowed main.py
