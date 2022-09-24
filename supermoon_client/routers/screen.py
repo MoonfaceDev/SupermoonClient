@@ -1,17 +1,23 @@
+import subprocess
 from io import BytesIO
 from typing import Literal
 
 import numpy as np
 import pyautogui
 from PIL import ImageGrab
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from mss import mss, windows
+from pyautogui._pyautogui_win import keyboardMapping
 from starlette.responses import Response, StreamingResponse
+from starlette.status import HTTP_403_FORBIDDEN
 
 from supermoon_client.api_decorator import supermoon_api
+from supermoon_client.logger import get_logger
 from supermoon_client.utils import get_frames
 
 windows.CAPTUREBLT = 0
+stream_process: subprocess.Popen | None = None
+screen_width, screen_height = pyautogui.size()
 
 router = APIRouter(
     prefix='/screen',
@@ -42,13 +48,49 @@ async def screen_share(fps: float = Query(24), resolution: tuple[int, int] = Que
                              media_type='multipart/x-mixed-replace; boundary=--frame')
 
 
+@router.post('/start_stream')
+@supermoon_api
+async def start_stream(fps: int = Query(16), resolution: tuple[int, int] = Query((screen_width, screen_height))):
+    global stream_process
+    if stream_process is not None:
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail='Stream process is already running')
+    stream_process = subprocess.Popen([
+        'ffmpeg',
+        '-re',
+        '-probesize', '32',
+        '-framerate', f'{fps}',
+        '-y',
+        '-f', 'gdigrab',
+        '-thread_queue_size', '64',
+        '-video_size', f'{resolution[0]}x{resolution[1]}',
+        '-i', 'desktop',
+        '-vcodec', 'libx264',
+        '-crf', '0',
+        '-preset', 'ultrafast',
+        '-color_range', '2',
+        '-fflags', 'nobuffer',
+        '-f', 'mpegts',
+        'udp://localhost:8081',
+    ], shell=True, stdin=subprocess.PIPE)
+
+
+@router.post('/stop_stream')
+@supermoon_api
+async def stop_stream():
+    global stream_process
+    if stream_process is None:
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail='Stream process is not running')
+    stream_process.communicate(bytes('q', 'UTF-8'))
+    stream_process = None
+
+
 @router.post('/mouse')
 @supermoon_api
 async def mouse_event(event: Literal['click', 'double', 'right'] = Query(), x: float = Query(), y: float = Query(),
                       width: float = Query(), height: float = Query()):
     # coordinates of desktop event
-    dx, dy = pyautogui.size()
-    x, y = dx * (x / width), dy * (y / height)
+    x, y = screen_width * (x / width), screen_height * (y / height)
+    get_logger().debug(f'Mouse event: ({x},{y})')
     # handle event
     if event == 'click':
         pyautogui.click(x, y)
@@ -60,8 +102,11 @@ async def mouse_event(event: Literal['click', 'double', 'right'] = Query(), x: f
 
 @router.post('/keyboard')
 @supermoon_api
-async def keyboard_event(event: Literal[tuple(['text', *pyautogui.KEYBOARD_KEYS])] = Query(), text: str = Query('')):
-    if event == 'text':
-        pyautogui.typewrite(text)
-    else:
-        pyautogui.press(event)
+async def keyboard_event(event: int = Query()):
+    matches = [k for k, v in keyboardMapping.items() if v == event]
+    if len(matches) == 0:
+        get_logger().error('Bad key! found 0 matches')
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail='Bad key! found 0 matches')
+    key = matches[0]
+    get_logger().debug(f'Key event: {key}')
+    pyautogui.press(key)
